@@ -22,3 +22,9 @@ regular mode creates smaller file sizes but interpreters may have problems since
 unless there is a change
 
 verbose mode will output all numbers and commands 
+
+GCode Simulator
+===============
+
+For an easy GCode simulator check out
+http://wiki.thinkhaus.org/index.php?title=Python_GCode_Simulator
