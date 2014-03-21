@@ -1,25 +1,35 @@
 #!/usr/bin/env python
+#!/usr/bin/python
 
-################################################################################################
-#                                                                                              #
-#     G code interpreter and executer for 2D CNC laser engraver using Raspberry Pi             #
-#       Xiang Zhai,   Oct 1, 2013                                                              #
-#       zxzhaixiang at gmail.com    														   #
-#																							   #
-#	    Modifications for terminal interface and Use with GCodeTools by Ian D. Miller          #
-#		Jan 7,2014			http://www.pxlweavr.com											   #
-#		info [at] pxlweavr.com																   #
-#  For instruction on how to build the laser engraver and operate the codes, please visit      #
-#   funofdiy.blogspot.com                                                                      #
-#                                                                                              #
-################################################################################################
+#################################################################################################
+#                                                                                               #
+#     G code interpreter and executer for 2D CNC laser engraver using Raspberry Pi              #
+#       Xiang Zhai,   Oct 1, 2013                                                               #
+#       zxzhaixiang at gmail.com    								#
+#												#
+#	    Modifications for terminal interface and Use with GCodeTools by Ian D. Miller       #
+#		Jan 7,2014			http://www.pxlweavr.com				#
+#		info [at] pxlweavr.com								#
+# 												#
+#												#
+#		Further Modification for use of the EasyDriver Stepper Motor Driver:		#
+#		https://www.sparkfun.com/products/10267						#
+#												#
+#       Also variable speed control and variable laser power by Dom Amato. March 20th 2014	#
+#												#
+#												#
+#  For original instruction on how to build the laser engraver 					#
+#    please visit funofdiy.blogspot.com                                  			#
+#                                                                                               #
+#################################################################################################
 
 import RPi.GPIO as GPIO
 import Motor_control
 from Bipolar_Stepper_Motor_Class import Bipolar_Stepper_Motor
 import time
-from numpy import pi, sin, cos, sqrt, arccos, arcsin
+from numpy import pi, sin, cos, sqrt, arccos
 import argparse
+import spi
 
 ################################################################################################
 ################################################################################################
@@ -38,14 +48,15 @@ args = parser.parse_args()
 
 GPIO.setmode(GPIO.BOARD)
 
-MX=Bipolar_Stepper_Motor(17,18);     #pin number for direction and step
+MX=Bipolar_Stepper_Motor(11,12);     #pin number for direction and step
 
-MY=Bipolar_Stepper_Motor(22,23);       
+MY=Bipolar_Stepper_Motor(15,16);       
 
-Laser_switch=21;
+Laser_switch=13;
 
 dx=0.075; #resolution in x direction. Unit: mm
 dy=0.075; #resolution in y direction. Unit: mm
+lpow=0;
 
 if (args.speed > 0):
 	Engraving_speed=args.speed; #unit=mm/sec=0.04in/sec
@@ -131,6 +142,18 @@ def laseron(): #When laser is turned on for the first time, pause a bit
 		GPIO.output(Laser_switch,True);
 		time.sleep(1)
 
+
+def setLaserPower(lines):
+	zchar_loc=lines.index('Z');
+    	i=zchar_loc+1;
+    	while (47<ord(lines[i])<58)|(lines[i]=='.')|(lines[i]=='-'):
+        	i+=1;
+    	lpowr=float(lines[zchar_loc+1:i]);
+	lpow=int(lpowr*255);
+	print 'Laser Pow= ', lpow;
+   	spi.transfer((0xB0000, 255-lpow))
+   
+   
 ###########################################################################################
 ###########################################################################################
 #################                           ###############################################
@@ -140,6 +163,8 @@ def laseron(): #When laser is turned on for the first time, pause a bit
 ###########################################################################################
 
 try:#read and execute G code
+    spi.openSPI(speed=10000000);
+    spi.transfer((0xB0000, 255))
     if (args.manual == False):
         filename=args.filepath; #file name of the G code commands
         for lines in open(filename,'r'):
@@ -166,7 +191,7 @@ try:#read and execute G code
 
             elif lines[0:3]=='M02':
                 GPIO.output(Laser_switch,False);
-                print 'finished. shuting down';
+                print 'finished. shutting down';
                 break;
             elif (lines[0:3]=='G1F')|(lines[0:4]=='G1 F'):
                 1;#do nothing
@@ -178,6 +203,8 @@ try:#read and execute G code
                         engraving=False;
                     else:
                         laseron()
+                        if(lines.find('Z')!=1):
+                        	setLaserPower(lines);
                     
                     [x_pos,y_pos]=XYposition(lines);
                     moveto(MX,x_pos,dx,MY,y_pos,dy,speed,engraving);
@@ -250,4 +277,5 @@ moveto(MX,0,dx,MY,0,dy,50,False);  # move back to Origin
 MX.unhold();
 MY.unhold();
 
+spi.closeSPI();
 GPIO.cleanup();
